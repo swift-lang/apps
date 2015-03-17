@@ -1,0 +1,73 @@
+#!/bin/bash
+# The geometry of the actual colorImage is 2400x2400
+# This resolution is maintained in the conversions to finally
+# create the montage. So the montage will be large
+
+output=$1       ; shift    # Path to output file
+selected=$1     ; shift    # Path to selected tiles file
+webdir=$1       ; shift    # Path to where results must go
+colorModis=($*) ; shift    # The colorModis files
+
+echo output=$output
+echo selected=$selected
+echo colorModis=${colorModis[*]}
+echo webdir=$webdir
+
+################################################################
+# Check for webdir to publish final image
+if [ ! -d $webdir ]; then
+   mkdir -p $webdir
+   if [ $? -ne 0 ]; then
+      echo Unable to create $webdir, quitting
+      exit 1
+   fi
+fi
+
+################################################################
+# Setup dirs
+bindir=$(cd $(dirname $0); pwd)
+tmpdir=$( eval mktemp -d $PWD/modis.assemble.XXXX )
+root=$(dirname $bindir)
+
+################################################################
+# Dump colorModis image filenames to a file for grepping
+FILE_LOOKUP=tmp.$RANDOM
+touch $TMP_FILE
+for i in ${colorModis[*]}
+do
+    echo $i >> $FILE_LOOKUP
+done
+################################################################
+
+echo $PWD
+# Selected tiles are in the format h<DIGIT><DIGIT>v<DIGIT><DIGIT>.rgb
+# Needs to stripped to get converted to actual
+for file in $(cat $selected);
+do
+    echo "Selected tile : $file"
+    base=$(basename $file)
+    base=${base%.modis}
+    #find the actual colorModis file.
+    # TODO
+
+    h=$( basename $file | cut -c2-3 )
+    v=$( basename $file | cut -c5-6 )
+
+    vh=v"$v"h"$h"
+
+    colorFile=$(grep $base $FILE_LOOKUP)
+    ls -thor $colorFile  #$tmpdir/$vh.rgb
+    # $bindir/rgb_to_png.py $colorFile 2400 2400 $tmpdir/img.$vh.png
+    mkdir -p $root/pngs/
+    $bindir/rgb_to_png.py $colorFile 2400 2400 $tmpdir/img.$vh.png &
+done;
+
+wait
+
+montage -geometry +4+4 $tmpdir/img*png $output
+
+#$bindir/montage.pl 5 4 200 200 v*
+#$bindir/rgb_to_png.py map.rgb 1000 800 $output
+
+exit 0
+################################################################

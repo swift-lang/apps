@@ -1,0 +1,75 @@
+#!/bin/bash
+
+echo "ARGS:"
+echo $*
+echo "/ARGS"
+
+output=$(cd $(dirname $1); echo $PWD/$(basename $1))     # Full pathname of output file
+selected=$(cd $(dirname $2); echo $PWD/$(basename $2))   # Full pathname of input text file "selected"
+webdir=$3
+#indir=$(cd $(dirname $3); echo $PWD/$(basename $4))      # Full pathname of image input dir
+indir=$(dirname $4)      # Dir of the the input files
+
+echo output=$output
+echo selected=$selected
+echo indir=$indir
+echo webdir=$webdir
+
+if [ ! -d $webdir ]; then
+   mkdir -p $webdir
+   if [ $? -ne 0 ]; then
+      echo Unable to create $webdir, quitting
+      exit 1
+   fi
+fi
+
+tmpdir=$( eval mktemp -d $PWD/modis.assemble.XXXX )
+bindir=$(cd $(dirname $0); pwd)
+graytile=$bindir/gray.rgb
+
+# input files are expected to start with hNNvNN.
+# we reverse this to form the final image
+
+cd $indir
+
+for h in {0..35}; do
+   h=$( printf %02d $h );
+
+   for v in {0..17}; do
+      v=$( printf %02d $v );
+      hv=h${h}v${v}
+      vh=v${v}h${h}
+
+      # Use graytile if the expected section is not found
+      if [ ! -f $indir/$hv.color.rgb ]; then
+         echo $indir/$hv.color.rgb does not exist
+         cp $graytile $tmpdir
+         mv $tmpdir/gray.rgb $tmpdir/$vh.rgb 
+
+      # Otherwise, downscale input images
+      #elif grep $hv $selected >&/dev/null; then
+      #   convert $hv.png -resize 290x290 $tmpdir/t.png
+      #   convert $tmp/t.png -bordercolor red -border 5x5 $tmpdir/$vh.png
+      else
+          echo $indir/$hv.color.rgb "converting"
+         #$bindir/rgb_downscale.pl $indir/$hv.color.rgb 2400 2400 8 $tmpdir/$vh.rgb
+         convert -size "2000x2000" $hv.png $tmpdir/$hv.png
+      fi
+  done
+done
+
+montage -tile 36x18 -geometry +0+0 $tmpdir/h*png $tmpdir/bigmap.png
+#cp $tmp/bigmap.png $output
+
+###########
+
+exit 0
+
+inputs=$(ls -1 $*)
+labels=""
+for f in $inputs; do
+  labels="$labels -label $(echo $f | sed -e 's/^.*\(h..v..\).*/\1/') $f"
+done
+
+montage $labels -font Courier-Regular $output
+
